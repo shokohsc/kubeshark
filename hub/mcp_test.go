@@ -7,14 +7,6 @@ import (
 	"testing"
 )
 
-type mcpTestResult struct {
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	IsError bool `json:"isError"`
-}
-
 func TestMCPToolsList(t *testing.T) {
 	h := NewServer(Config{Version: "1.2.3"}, NewStore(), nil).Handler()
 
@@ -73,13 +65,6 @@ func TestMCPToolsList(t *testing.T) {
 func TestMCPCallListTool(t *testing.T) {
 	h := NewServer(Config{}, NewStore(), nil).Handler()
 
-	// Empty data-set shape for the tools whose stub responses are defined in
-	// cmd/mcp_test.go; the rest must still return success-shaped pretty JSON.
-	wantSubstring := map[string]string{
-		"list_workloads": `"workloads": []`,
-		"list_api_calls": `"calls": []`,
-		"get_api_stats":  `"total_calls": 0`,
-	}
 	for _, name := range []string{
 		"list_workloads", "list_api_calls", "get_api_call", "get_api_stats",
 		"list_l4_flows", "get_l4_flow_summary", "list_snapshots",
@@ -90,22 +75,26 @@ func TestMCPCallListTool(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("POST /mcp/tools/call %s status = %d, want 200", name, rec.Code)
 			}
-			res := parseMCPTestResult(t, rec.Body.Bytes())
-			if len(res.Content) == 0 || res.Content[0].Type != "text" {
-				t.Fatalf("result content = %+v, want one text item", res.Content)
+			// The CLI passes the raw body through (callHubTool), so the body must
+			// be the raw payload JSON — never an MCP result envelope.
+			var got map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode body %q: %v (want raw payload JSON object)", rec.Body.String(), err)
 			}
-			if res.IsError {
-				t.Errorf("isError = true, want success result")
-			}
-			text := res.Content[0].Text
-			if !strings.Contains(text, "\n") {
-				t.Errorf("text = %q, want pretty-printed JSON", text)
-			}
-			if !json.Valid([]byte(text)) {
-				t.Errorf("text = %q, want valid JSON", text)
-			}
-			if sub, ok := wantSubstring[name]; ok && !strings.Contains(text, sub) {
-				t.Errorf("text = %q, want it to contain %q", text, sub)
+			switch name {
+			case "list_workloads":
+				assertEmptyArray(t, got, "workloads")
+			case "list_api_calls":
+				assertEmptyArray(t, got, "calls")
+			case "get_api_stats":
+				stats, _ := got["stats"].(map[string]any)
+				if v, ok := stats["total_calls"]; !ok || v != float64(0) {
+					t.Errorf("stats = %v, want total_calls == 0", got["stats"])
+				}
+			case "check_kubeshark_status":
+				if v, ok := got["running"]; !ok || v != false {
+					t.Errorf("running = %v, want false with empty store", got["running"])
+				}
 			}
 		})
 	}
@@ -120,18 +109,11 @@ func TestMCPCallControlTool(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := doPost(t, h, "/mcp/tools/call", `{"name":"`+name+`","arguments":{}}`)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("POST /mcp/tools/call %s status = %d, want 200", name, rec.Code)
+			if rec.Code != http.StatusNotImplemented {
+				t.Fatalf("POST /mcp/tools/call %s status = %d, want 501", name, rec.Code)
 			}
-			res := parseMCPTestResult(t, rec.Body.Bytes())
-			if len(res.Content) == 0 || res.Content[0].Type != "text" {
-				t.Fatalf("result content = %+v, want one text item", res.Content)
-			}
-			if res.IsError {
-				t.Errorf("isError = true, want success-shaped result")
-			}
-			if !strings.Contains(res.Content[0].Text, "data-plane not available in this build") {
-				t.Errorf("text = %q, want it to contain %q", res.Content[0].Text, "data-plane not available in this build")
+			if got := strings.TrimSpace(rec.Body.String()); got != "data-plane not available in this build" {
+				t.Errorf("body = %q, want %q", got, "data-plane not available in this build")
 			}
 		})
 	}
@@ -141,23 +123,23 @@ func TestMCPCallUnknown(t *testing.T) {
 	h := NewServer(Config{}, NewStore(), nil).Handler()
 
 	rec := doPost(t, h, "/mcp/tools/call", `{"name":"nope","arguments":{}}`)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /mcp/tools/call unknown status = %d, want 200 (MCP errors are in-body)", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /mcp/tools/call unknown status = %d, want 404", rec.Code)
 	}
-	res := parseMCPTestResult(t, rec.Body.Bytes())
-	if !res.IsError {
-		t.Error("isError = false, want MCP error result for unknown tool")
-	}
-	if len(res.Content) == 0 || res.Content[0].Text == "" {
-		t.Errorf("content = %+v, want non-empty error text", res.Content)
+	if got := strings.TrimSpace(rec.Body.String()); got != "unknown tool: nope" {
+		t.Errorf("body = %q, want %q", got, "unknown tool: nope")
 	}
 }
 
-func parseMCPTestResult(t *testing.T, body []byte) mcpTestResult {
+func assertEmptyArray(t *testing.T, obj map[string]any, key string) {
 	t.Helper()
-	var res mcpTestResult
-	if err := json.Unmarshal(body, &res); err != nil {
-		t.Fatalf("decode result body %q: %v", body, err)
+	v, ok := obj[key]
+	if !ok {
+		t.Errorf("body missing key %q", key)
+		return
 	}
-	return res
+	arr, ok := v.([]any)
+	if !ok || len(arr) != 0 {
+		t.Errorf("%q = %v, want empty array", key, v)
+	}
 }

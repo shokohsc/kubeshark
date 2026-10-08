@@ -26,16 +26,6 @@ type mcpCallRequest struct {
 	Arguments map[string]any `json:"arguments"`
 }
 
-type mcpContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type mcpCallResult struct {
-	Content []mcpContent `json:"content"`
-	IsError bool         `json:"isError,omitempty"`
-}
-
 const mcpDataPlaneMsg = "data-plane not available in this build"
 
 var mcpObjectSchema = json.RawMessage(`{"type":"object"}`)
@@ -70,7 +60,7 @@ var mcpDataPlaneTools = []string{
 var mcpEmptyPayloads = map[string]any{
 	"list_workloads":        map[string]any{"workloads": []any{}},
 	"list_api_calls":        map[string]any{"calls": []any{}},
-	"get_api_call":          map[string]any{"id": "", "path": ""},
+	"get_api_call":          map[string]any{"id": "", "path": ""}, // ponytail: missing-id args not validated hub-side; the CLI tolerates both 200 and non-200
 	"get_api_stats":         map[string]any{"stats": map[string]any{"total_calls": 0}},
 	"list_l4_flows":         map[string]any{"flows": []any{}},
 	"get_l4_flow_summary":   map[string]any{"summary": map[string]any{}},
@@ -91,30 +81,26 @@ func (s *Server) handleMCPInfo(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// handleMCPCallTool serves POST /mcp/tools/call; every outcome is HTTP 200 —
-// MCP protocol errors travel in-body as isError results.
+// handleMCPCallTool serves POST /mcp/tools/call. The CLI (callHubTool in
+// cmd/mcpRunner.go) passes the raw body through as the tool text and derives
+// isError from the HTTP status only, so success is the raw payload JSON and
+// failures are non-2xx plain-text bodies.
 func (s *Server) handleMCPCallTool(w http.ResponseWriter, r *http.Request) {
 	var req mcpCallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, s.mcpCall(req.Name))
-}
-
-func (s *Server) mcpCall(name string) mcpCallResult {
-	if slices.Contains(mcpDataPlaneTools, name) {
-		return mcpSuccess(mcpDataPlaneMsg)
+	if slices.Contains(mcpDataPlaneTools, req.Name) {
+		http.Error(w, mcpDataPlaneMsg, http.StatusNotImplemented)
+		return
 	}
-	payload, ok := s.mcpPayload(name)
+	payload, ok := s.mcpPayload(req.Name)
 	if !ok {
-		return mcpErrorResult("unknown tool: " + name)
+		http.Error(w, "unknown tool: "+req.Name, http.StatusNotFound)
+		return
 	}
-	text, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return mcpErrorResult("encode error: " + err.Error())
-	}
-	return mcpSuccess(string(text))
+	writeJSON(w, payload)
 }
 
 func (s *Server) mcpPayload(name string) (any, bool) {
@@ -123,14 +109,6 @@ func (s *Server) mcpPayload(name string) (any, bool) {
 	}
 	payload, ok := mcpEmptyPayloads[name]
 	return payload, ok
-}
-
-func mcpSuccess(text string) mcpCallResult {
-	return mcpCallResult{Content: []mcpContent{{Type: "text", Text: text}}}
-}
-
-func mcpErrorResult(text string) mcpCallResult {
-	return mcpCallResult{Content: []mcpContent{{Type: "text", Text: text}}, IsError: true}
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
