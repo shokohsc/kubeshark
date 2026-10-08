@@ -39,6 +39,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /worker", s.handleGetWorker)
 	mux.HandleFunc("GET /mcp", s.handleMCPInfo)
 	mux.HandleFunc("POST /mcp/tools/call", s.handleMCPCallTool)
+	mux.HandleFunc("GET /health/hub", s.handleHealthHub)
+	mux.HandleFunc("GET /health/workers", s.handleHealthWorkers)
+	mux.HandleFunc("POST /networkpolicies/ensure-blocked-pod", s.handleEnsureBlockedPod)
 	mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	return s.requireAuth(mux)
 }
