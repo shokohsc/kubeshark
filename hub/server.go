@@ -75,7 +75,20 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /records", s.handlePostRecords)
 	mux.HandleFunc("DELETE /records/bulk", s.handleDeleteRecordsBulk)
 	mux.Handle("/debug/pprof/", http.DefaultServeMux)
-	return s.requireAuth(mux)
+	// Connect unary RPCs are dispatched before the mux: Go 1.22 patterns cannot
+	// match /{pkg}.{Service}/{Method} (one wildcard per segment), and a
+	// POST /{path...} catch-all conflicts with the method-less /debug/pprof/
+	// pattern. No existing route has a dotted first segment to shadow.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			if path := connectPath(r.URL.Path); path != "" {
+				s.dispatchConnect(w, r, path)
+				return
+			}
+		}
+		mux.ServeHTTP(w, r)
+	})
+	return s.requireAuth(handler)
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
