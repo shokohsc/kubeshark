@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -68,8 +69,11 @@ func (s *Server) streamCaptureBaseEntries(w http.ResponseWriter, r *http.Request
 	ch, cancel := ring.Subscribe()
 	defer cancel()
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	// read goroutine
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(r.Body)
 		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 		scanner.Split(bufio.ScanLines)
@@ -94,9 +98,15 @@ func (s *Server) streamCaptureBaseEntries(w http.ResponseWriter, r *http.Request
 	for {
 		select {
 		case <-ctx.Done():
+			// ensure read goroutine unblocks
+			if r.Body != nil {
+				r.Body.Close()
+			}
+			wg.Wait()
 			return
 		case entry, more := <-ch:
 			if !more {
+				wg.Wait()
 				return
 			}
 			v := entry

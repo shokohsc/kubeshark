@@ -197,11 +197,6 @@ func (s *Store) ClusterInfo() json.RawMessage {
 // LogRing returns a separate bounded ring for script logs (capacity 10000).
 // ponytail: log ring fixed at 10000; no config for logs
 func (s *Store) LogRing() *Ring {
-	if s.ring == nil {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-	}
-	// try to get/create log ring; store keeps its own if present
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.logRing == nil {
