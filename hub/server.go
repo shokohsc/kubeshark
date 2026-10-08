@@ -24,6 +24,7 @@ type Server struct {
 // !cfg.AuthEnabled; with auth enabled a nil verifier fails closed (all
 // requests 401).
 func NewServer(cfg Config, store *Store, verifier TokenVerifier) *Server {
+	store.setRingSize(cfg.RingSize)
 	return &Server{cfg: cfg, store: store, verifier: verifier}
 }
 
@@ -65,6 +66,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /pods/target/settings", s.handlePodsTargetSettings)
 	mux.HandleFunc("POST /sentry/front", s.handleSentryFront)
 	mux.HandleFunc("POST /oauth2/logout", s.handleOAuth2Logout)
+	mux.HandleFunc("GET /flows2", s.handleFlows2)
+	mux.HandleFunc("GET /fetch-records", s.handleFetchRecords)
+	mux.HandleFunc("POST /fetch-records", s.handleFetchRecords)
+	mux.HandleFunc("GET /fetch-records/cloud/buckets", s.handleFetchRecords)
+	mux.HandleFunc("GET /fetch-records/list/nodes", s.handleFetchRecordsListNodes)
+	mux.HandleFunc("POST /fetch-records/list/get-script", s.handleFetchRecordsGetScript)
+	mux.HandleFunc("POST /records", s.handlePostRecords)
+	mux.HandleFunc("DELETE /records/bulk", s.handleDeleteRecordsBulk)
 	mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	return s.requireAuth(mux)
 }

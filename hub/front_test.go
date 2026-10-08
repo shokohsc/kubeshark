@@ -380,3 +380,71 @@ func TestLicenseFrontRoutes(t *testing.T) {
 		t.Errorf("POST /license/push malformed status = %d, want 400", rec.Code)
 	}
 }
+
+func TestFlows2ServesRing(t *testing.T) {
+	store := NewStore()
+	h := NewServer(Config{}, store, nil).Handler()
+
+	for _, entry := range []string{`{"id":"a"}`, `{"id":"b"}`, `{"id":"c"}`} {
+		store.Ring().Append(json.RawMessage(entry))
+	}
+
+	rec := doRequest(t, h, "/flows2?aggregate=n")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /flows2 status = %d, want 200", rec.Code)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode GET /flows2 body %q: %v", rec.Body.String(), err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("GET /flows2 len = %d, want 3 entries in append order", len(got))
+	}
+	for i, want := range []string{"a", "b", "c"} {
+		if got[i]["id"] != want {
+			t.Errorf("GET /flows2[%d].id = %v, want %q", i, got[i]["id"], want)
+		}
+	}
+}
+
+func TestFlows2Empty(t *testing.T) {
+	h := NewServer(Config{}, NewStore(), nil).Handler()
+
+	rec := doRequest(t, h, "/flows2")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /flows2 status = %d, want 200", rec.Code)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+		t.Errorf("GET /flows2 empty body = %q, want [] (never null)", got)
+	}
+}
+
+func TestFetchRecordsShapes(t *testing.T) {
+	h := NewServer(Config{}, NewStore(), nil).Handler()
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		want   string
+	}{
+		{"fetch-records GET", http.MethodGet, "/fetch-records", "", `{"Contents":[]}`},
+		{"fetch-records POST", http.MethodPost, "/fetch-records", "{}", `{"Contents":[]}`},
+		{"cloud buckets", http.MethodGet, "/fetch-records/cloud/buckets", "", `{"Contents":[]}`},
+		{"list nodes", http.MethodGet, "/fetch-records/list/nodes", "", `[]`},
+		{"get script", http.MethodPost, "/fetch-records/list/get-script", "{}", `""`},
+		{"records POST", http.MethodPost, "/records", "{}", `{}`},
+		{"records bulk DELETE", http.MethodDelete, "/records/bulk", "", `{"deleted":0}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doFront(t, h, tc.method, tc.path, tc.body)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s %s status = %d, want 200", tc.method, tc.path, rec.Code)
+			}
+			if got := strings.TrimSpace(rec.Body.String()); got != tc.want {
+				t.Errorf("%s %s body = %q, want %q", tc.method, tc.path, got, tc.want)
+			}
+		})
+	}
+}

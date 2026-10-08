@@ -17,7 +17,12 @@ type Store struct {
 	settings map[string]any
 	scripts  map[string]Script
 	targets  []string
+	ring     *Ring
 }
+
+// defaultRingSize backs stores built without a configured size; cmd/hub/main.go
+// stamps Config.RingSize with the same fixed value.
+const defaultRingSize = 100000
 
 // Script is a stored hub script as the front CRUD endpoints round-trip it.
 type Script struct {
@@ -36,7 +41,26 @@ func NewStore() *Store {
 			"dissection": true,
 		},
 		scripts: make(map[string]Script),
+		ring:    NewRing(defaultRingSize),
 	}
+}
+
+// Ring returns the entry ring; never nil.
+func (s *Store) Ring() *Ring {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ring
+}
+
+// setRingSize swaps in a ring of the given capacity; construction-time only,
+// before the store is shared with running handlers.
+func (s *Store) setRingSize(n int) {
+	if n < 1 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ring = NewRing(n)
 }
 
 // UpsertPod stores the pod keyed by namespace/name and records when it was seen.

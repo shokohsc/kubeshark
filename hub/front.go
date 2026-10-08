@@ -186,6 +186,39 @@ func (s *Server) handlePodsTargetSettings(w http.ResponseWriter, _ *http.Request
 	writeJSON(w, map[string]any{"targets": s.store.Targets()})
 }
 
+// handleFlows2 serves GET /flows2 — the ring's entries, oldest first.
+// ponytail: the aggregate query parameter is ignored — no server-side
+// aggregation; the front filters client-side.
+func (s *Server) handleFlows2(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.store.Ring().Snapshot())
+}
+
+// ponytail: cloud-record browsing is not implemented; the body matches the
+// only observed bundle parse guard s?.Contents → [].
+func (s *Server) handleFetchRecords(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{"Contents": []any{}})
+}
+
+func (s *Server) handleFetchRecordsListNodes(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, []string{})
+}
+
+func (s *Server) handleFetchRecordsGetScript(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, "")
+}
+
+// ponytail: record ingestion is not implemented — POST /records only
+// acknowledges so the front moves on (bundle checks status 200 only).
+func (s *Server) handlePostRecords(w http.ResponseWriter, _ *http.Request) {
+	writeOK(w)
+}
+
+// ponytail: nothing is ever deleted because nothing is stored — the bundle
+// checks status 200 only.
+func (s *Server) handleDeleteRecordsBulk(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{"deleted": 0})
+}
+
 // ponytail: accept-and-discard — the Sentry event sink and OAuth2 logout have
 // no backend in this build; both answer 200 so clients move on.
 func (s *Server) handleSentryFront(w http.ResponseWriter, _ *http.Request) {
