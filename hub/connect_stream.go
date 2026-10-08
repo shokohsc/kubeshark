@@ -57,28 +57,61 @@ func (s *Server) streamClusterInfo(w http.ResponseWriter, r *http.Request) {
 	_ = writeConnectEnd(w)
 }
 
+// ponytail: duplex - consume request envelopes into ring AND stream ring entries back until disconnect
 func (s *Server) streamCaptureBaseEntries(w http.ResponseWriter, r *http.Request) {
 	ring := s.store.Ring()
-	scanner := bufio.NewScanner(r.Body)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	scanner.Split(bufio.ScanLines)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	ctx := r.Context()
+	flusher, ok := w.(http.Flusher)
+	w.Header().Set("Content-Type", connectJSONCT)
+	w.WriteHeader(http.StatusOK)
+
+	ch, cancel := ring.Subscribe()
+	defer cancel()
+
+	// read goroutine
+	go func() {
+		scanner := bufio.NewScanner(r.Body)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+		scanner.Split(bufio.ScanLines)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			if len(line) == 0 {
+				continue
+			}
+			var env connectEnvelope
+			if err := json.Unmarshal(line, &env); err != nil {
+				continue
+			}
+			if env.Type == "end" {
+				break
+			}
+			if env.Type == "message" && env.Value != nil {
+				ring.Append(append(json.RawMessage(nil), *env.Value...))
+			}
 		}
-		var env connectEnvelope
-		if err := json.Unmarshal(line, &env); err != nil {
-			continue
-		}
-		if env.Type == "end" {
-			break
-		}
-		if env.Type == "message" && env.Value != nil {
-			ring.Append(append(json.RawMessage(nil), *env.Value...))
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case entry, more := <-ch:
+			if !more {
+				return
+			}
+			v := entry
+			env := struct {
+				Type  string           `json:"type"`
+				Value *json.RawMessage `json:"value,omitempty"`
+			}{Type: "message", Value: &v}
+			if b, err := json.Marshal(env); err == nil {
+				_, _ = w.Write(append(b, '\n'))
+				if ok {
+					flusher.Flush()
+				}
+			}
 		}
 	}
-	_ = writeConnectEnd(w)
 }
 
 func (s *Server) streamScriptLogsWorker(w http.ResponseWriter, r *http.Request) {

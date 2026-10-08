@@ -42,26 +42,34 @@ func TestCaptureBaseEntriesIngestsToRing(t *testing.T) {
 	store := NewStore()
 	h := NewServer(Config{}, store, nil).Handler()
 
-	body := `{"type":"message","value":{"id":1,"ts":1}}
-{"type":"message","value":{"id":2,"ts":2}}
-{"type":"message","value":{"id":3,"ts":3}}
-{"type":"end"}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/capture.Capture/CaptureBaseEntries", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/connect+json")
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	body := "{\"type\":\"message\",\"value\":{\"id\":1,\"ts\":1}}\n{\"type\":\"message\",\"value\":{\"id\":2,\"ts\":2}}\n{\"type\":\"message\",\"value\":{\"id\":3,\"ts\":3}}\n"
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/capture.Capture/CaptureBaseEntries", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "application/connect+json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	time.Sleep(20 * time.Millisecond)
 	snap := store.Ring().Snapshot()
 	if len(snap) != 3 {
 		t.Fatalf("len = %d, want 3", len(snap))
 	}
 	if string(snap[0]) != `{"id":1,"ts":1}` || string(snap[1]) != `{"id":2,"ts":2}` || string(snap[2]) != `{"id":3,"ts":3}` {
-		t.Fatalf("snap = %s %s %s", snap[0], snap[1], snap[2])
+		t.Fatalf("snap mismatch")
 	}
 }
-
 func TestRegisterClientHeartbeatAndRelay(t *testing.T) {
 	store := NewStore()
 	h := NewServer(Config{}, store, nil).Handler()
