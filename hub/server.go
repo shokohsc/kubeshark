@@ -74,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /fetch-records/list/get-script", s.handleFetchRecordsGetScript)
 	mux.HandleFunc("POST /records", s.handlePostRecords)
 	mux.HandleFunc("DELETE /records/bulk", s.handleDeleteRecordsBulk)
+	mux.HandleFunc("GET /ws", s.handleWS)
+	mux.HandleFunc("GET /wsnd", s.handleWS)
+	mux.HandleFunc("GET /wsFull", s.handleWS)
 	mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	// Connect unary RPCs are dispatched before the mux: Go 1.22 patterns cannot
 	// match /{pkg}.{Service}/{Method} (one wildcard per segment), and a
