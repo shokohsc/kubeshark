@@ -71,28 +71,43 @@ func extractCredential(h http.Header) (value string, isLicense bool) {
 	return "", false
 }
 
+// subjectKey carries the verified token subject (e.g. "ns:name") from the
+// auth middleware to handlers (GET /whoami); unexported to stay package-private.
+type subjectKey struct{}
+
 // requireAuth wraps next with the auth middleware: pass-through when auth is
-// off, otherwise a license match or an allowlisted TokenReview subject.
+// off, otherwise a license match or an allowlisted TokenReview subject, whose
+// subject is attached to the request context.
 // Every rejection is a plain 401, never a redirect.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.cfg.AuthEnabled || s.authorized(r) {
+		if !s.cfg.AuthEnabled {
 			next.ServeHTTP(w, r)
 			return
 		}
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		subject, ok := s.authorizedSubject(r)
+		if !ok {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		if subject != "" {
+			r = r.WithContext(context.WithValue(r.Context(), subjectKey{}, subject))
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
-func (s *Server) authorized(r *http.Request) bool {
+// authorizedSubject reports whether r carries an acceptable credential,
+// returning the verified subject (empty for a License-Key match).
+func (s *Server) authorizedSubject(r *http.Request) (string, bool) {
 	credential, isLicense := extractCredential(r.Header)
 	switch {
 	case isLicense:
-		return s.cfg.License != "" && credential == s.cfg.License
+		return "", s.cfg.License != "" && credential == s.cfg.License
 	case credential != "" && s.verifier != nil:
 		subject, err := s.verifier.Verify(r.Context(), credential)
-		return err == nil && slices.Contains(s.cfg.ServiceAccounts, subject)
+		return subject, err == nil && slices.Contains(s.cfg.ServiceAccounts, subject)
 	default:
-		return false
+		return "", false
 	}
 }

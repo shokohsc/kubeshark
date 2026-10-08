@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -9,16 +10,32 @@ import (
 
 // Store is the in-memory hub state.
 type Store struct {
-	mu      sync.RWMutex
-	pods    map[string]*corev1.Pod
-	seen    map[string]time.Time
-	license string
+	mu       sync.RWMutex
+	pods     map[string]*corev1.Pod
+	seen     map[string]time.Time
+	license  string
+	settings map[string]any
+	scripts  map[string]Script
+	targets  []string
+}
+
+// Script is a stored hub script as the front CRUD endpoints round-trip it.
+type Script struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Language string `json:"language"`
+	Code     string `json:"code"`
+	Active   bool   `json:"active"`
 }
 
 func NewStore() *Store {
 	return &Store{
 		pods: make(map[string]*corev1.Pod),
 		seen: make(map[string]time.Time),
+		settings: map[string]any{
+			"dissection": true,
+		},
+		scripts: make(map[string]Script),
 	}
 }
 
@@ -58,4 +75,74 @@ func (s *Store) License() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.license
+}
+
+// Settings returns a copy of the stored settings; defaults to dissection on.
+func (s *Store) Settings() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]any, len(s.settings))
+	for key, value := range s.settings {
+		out[key] = value
+	}
+	return out
+}
+
+func (s *Store) SetSetting(key string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.settings[key] = value
+}
+
+// Scripts returns a snapshot of the stored scripts; never nil, so callers
+// encode a JSON array.
+func (s *Store) Scripts() []Script {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	scripts := make([]Script, 0, len(s.scripts))
+	for _, script := range s.scripts {
+		scripts = append(scripts, script)
+	}
+	return scripts
+}
+
+func (s *Store) PutScript(script Script) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scripts[script.ID] = script
+}
+
+func (s *Store) DeleteScript(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.scripts, id)
+}
+
+func (s *Store) SetScriptActive(id string, on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if script, ok := s.scripts[id]; ok {
+		script.Active = on
+		s.scripts[id] = script
+	}
+}
+
+// Targets returns a copy of the target hosts; never nil, so callers encode a
+// JSON array.
+func (s *Store) Targets() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]string, len(s.targets))
+	copy(out, s.targets)
+	return out
+}
+
+// SetTarget appends host unless it is already targeted (client retries must
+// not grow the list).
+func (s *Store) SetTarget(host string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !slices.Contains(s.targets, host) {
+		s.targets = append(s.targets, host)
+	}
 }
