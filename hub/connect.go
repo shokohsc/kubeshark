@@ -61,6 +61,19 @@ func connectPath(p string) string {
 }
 
 func (s *Server) dispatchConnect(w http.ResponseWriter, r *http.Request, path string) {
+	// handle streaming methods
+	switch path {
+	case "/capture.Capture/StreamClusterInfo",
+		"/capture.Capture/CaptureBaseEntries",
+		"/script_logs.ScriptLogsWorker/StreamLogs",
+		"/capture.UIEventService/RegisterClient",
+		"/snapshot.SnapshotData/GetFiles",
+		"/script_logs.ScriptLogsDashboard/StreamLogs",
+		"/base_entries_database.BaseEntriesDatabaseService/FetchBaseEntries",
+		"/base_entries_database.BaseEntriesDatabaseService/FetchSelectedBaseEntries":
+		s.handleConnectStreamClientPost(path)(w, r)
+		return
+	}
 	h, ok := connectMethods[path]
 	switch {
 	case !ok:

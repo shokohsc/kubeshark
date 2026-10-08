@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"slices"
 	"sync"
 	"time"
@@ -10,14 +11,16 @@ import (
 
 // Store is the in-memory hub state.
 type Store struct {
-	mu       sync.RWMutex
-	pods     map[string]*corev1.Pod
-	seen     map[string]time.Time
-	license  string
-	settings map[string]any
-	scripts  map[string]Script
-	targets  []string
-	ring     *Ring
+	mu          sync.RWMutex
+	pods        map[string]*corev1.Pod
+	seen        map[string]time.Time
+	license     string
+	settings    map[string]any
+	scripts     map[string]Script
+	targets     []string
+	ring        *Ring
+	clusterInfo json.RawMessage
+	logRing     *Ring
 }
 
 // defaultRingSize backs stores built without a configured size; cmd/hub/main.go
@@ -169,4 +172,40 @@ func (s *Store) SetTarget(host string) {
 	if !slices.Contains(s.targets, host) {
 		s.targets = append(s.targets, host)
 	}
+}
+
+var _ = struct{}{} // padding
+
+// SetClusterInfo stores the latest cluster info payload; keep-latest only.
+// ponytail: cluster info is overwrite-only, no history retention
+func (s *Store) SetClusterInfo(info json.RawMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clusterInfo = append(json.RawMessage(nil), info...)
+}
+
+// ClusterInfo returns the latest cluster info; may be empty raw JSON.
+func (s *Store) ClusterInfo() json.RawMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.clusterInfo) == 0 {
+		return json.RawMessage(`{}`)
+	}
+	return append(json.RawMessage(nil), s.clusterInfo...)
+}
+
+// LogRing returns a separate bounded ring for script logs (capacity 10000).
+// ponytail: log ring fixed at 10000; no config for logs
+func (s *Store) LogRing() *Ring {
+	if s.ring == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+	}
+	// try to get/create log ring; store keeps its own if present
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.logRing == nil {
+		s.logRing = NewRing(10000)
+	}
+	return s.logRing
 }
