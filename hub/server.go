@@ -37,6 +37,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /license", s.handlePostLicense)
 	mux.HandleFunc("POST /pcaps/merge", s.handlePcapsMerge)
 	mux.HandleFunc("GET /worker", s.handleGetWorker)
+	mux.HandleFunc("GET /mcp", s.handleMCPInfo)
+	mux.HandleFunc("POST /mcp/tools/call", s.handleMCPCallTool)
 	mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	return s.requireAuth(mux)
 }
