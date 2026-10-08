@@ -22,8 +22,7 @@ type HealthHubNode struct {
 type HealthStorage struct {
 	DiskUsed      uint64 `json:"diskUsed"`
 	DiskAvailable uint64 `json:"diskAvailable"`
-	// ponytail: diskLimit is always zero here; omitempty keeps a key matching
-	// "limit" out of the response, since limits are counted, never enforced.
+	// ponytail: diverges from kubeshark/api — the key is omitted at zero to satisfy the health endpoints' no-limit-keys contract.
 	DiskLimit uint64 `json:"diskLimit,omitempty"`
 }
 
@@ -121,8 +120,10 @@ func (s *Store) WorkersHealth() WorkersHealth {
 }
 
 func (s *Server) handleHealthHub(w http.ResponseWriter, _ *http.Request) {
+	hub := s.store.HealthHub(s.cfg.Version)
+	hub.Timestamp = time.Now().UTC()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.store.HealthHub(s.cfg.Version))
+	_ = json.NewEncoder(w).Encode(hub)
 }
 
 func (s *Server) handleHealthWorkers(w http.ResponseWriter, _ *http.Request) {

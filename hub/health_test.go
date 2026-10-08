@@ -53,6 +53,14 @@ func TestHealthHubCountsFromStore(t *testing.T) {
 	if _, ok := storage["diskUsed"]; !ok {
 		t.Errorf("storage keys = %v, want diskUsed", storage)
 	}
+
+	var resp HealthHub
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode body %q: %v", rec.Body.String(), err)
+	}
+	if resp.Timestamp.IsZero() {
+		t.Errorf("timestamp = %s, want a non-zero time", resp.Timestamp)
+	}
 }
 
 func TestHealthHubEmpty(t *testing.T) {
