@@ -12,33 +12,36 @@ import (
 type connectMethod = func(ctx context.Context, body json.RawMessage) (json.RawMessage, error)
 
 // connectMethods maps full Connect paths (/{pkg}.{Service}/{Method}) to unary
-// handlers. nil = method exists in the proto but is not implemented yet
+// handlers.
+// ponytail: nil = method exists in the proto but is not implemented yet
 // (streams and cloud transfer land in later tasks).
 var connectMethods = map[string]connectMethod{
-	"/capture.UIEventService/ValidateDisplayFilter":                                constMessage(`{"matched":true}`),
-	"/capture.UIEventService/RequestPayload":                                       constMessage(`{}`),
-	"/capture.UIEventService/RequestPcap":                                          constMessage(`{}`),
-	"/capture.Capture/CaptureFilter":                                               constMessage(`{"status":"accepted"}`),
-	"/capture.Capture/DisplayFilter":                                               constMessage(`{"status":"accepted"}`),
-	"/snapshot.SnapshotManagement/CreateSnapshot":                                  constMessage(`{}`),
-	"/snapshot.SnapshotManagement/GetSnapshot":                                     constMessage(`{}`),
-	"/snapshot.SnapshotManagement/ListSnapshots":                                   constMessage(`{"snapshots":[]}`),
-	"/snapshot.SnapshotManagement/DeleteSnapshot":                                  constMessage(`{}`),
-	"/snapshot.SnapshotManagement/RenameSnapshot":                                  constMessage(`{}`),
+	"/capture.UIEventService/ValidateDisplayFilter": constMessage(`{"matched":true}`),
+	"/capture.UIEventService/RequestPayload":        constMessage(`{}`),
+	"/capture.UIEventService/RequestPcap":           constMessage(`{}`),
+	"/capture.Capture/CaptureFilter":                constMessage(`{"status":"accepted"}`),
+	"/capture.Capture/DisplayFilter":                constMessage(`{"status":"accepted"}`),
+	"/snapshot.SnapshotManagement/CreateSnapshot":   constMessage(`{}`),
+	"/snapshot.SnapshotManagement/GetSnapshot":      constMessage(`{}`),
+	"/snapshot.SnapshotManagement/ListSnapshots":    constMessage(`{"snapshots":[]}`),
+	"/snapshot.SnapshotManagement/DeleteSnapshot":   constMessage(`{}`),
+	"/snapshot.SnapshotManagement/RenameSnapshot":   constMessage(`{}`),
+	// ponytail: time-boundary responses are empty {} stubs; front shows loading until real data lands.
 	"/snapshot.SnapshotManagement/GetDataTimeBoundaries":                           constMessage(`{}`),
 	"/snapshot.SnapshotManagement/GetL7DataTimeBoundaries":                         constMessage(`{}`),
 	"/snapshot.SnapshotData/GetDataTimeBoundaries":                                 constMessage(`{}`),
 	"/base_entries_database.BaseEntriesDatabaseService/GetBaseEntriesDatabaseInfo": constMessage(`{"databaseInfo":{}}`),
-	"/base_entries_database.BaseEntriesDatabaseService/FetchBaseEntry":             constMessage(`{}`),
-	"/base_entries_database.BaseEntriesDatabaseService/FetchBaseEntryHistory":      constMessage(`{}`),
-	"/capture.PayloadService/LoadPayload":                                          nil,
-	"/capture.PayloadService/LoadPcap":                                             nil,
-	"/snapshot.SnapshotManagement/UploadSnapshotToCloud":                           nil,
-	"/snapshot.SnapshotManagement/DownloadSnapshotFromCloud":                       nil,
-	"/snapshot.SnapshotManagement/UploadSnapshot":                                  nil,
-	"/snapshot.SnapshotManagement/DownloadSnapshot":                                nil,
-	"/snapshot.SnapshotManagement/ListSnapshotFiles":                               nil,
-	"/snapshot.SnapshotManagement/GetSnapshotFile":                                 nil,
+	// ponytail: fetch responses are empty {} stubs; front shows empty until real data lands.
+	"/base_entries_database.BaseEntriesDatabaseService/FetchBaseEntry":        constMessage(`{}`),
+	"/base_entries_database.BaseEntriesDatabaseService/FetchBaseEntryHistory": constMessage(`{}`),
+	"/capture.PayloadService/LoadPayload":                                     nil,
+	"/capture.PayloadService/LoadPcap":                                        nil,
+	"/snapshot.SnapshotManagement/UploadSnapshotToCloud":                      nil,
+	"/snapshot.SnapshotManagement/DownloadSnapshotFromCloud":                  nil,
+	"/snapshot.SnapshotManagement/UploadSnapshot":                             nil,
+	"/snapshot.SnapshotManagement/DownloadSnapshot":                           nil,
+	"/snapshot.SnapshotManagement/ListSnapshotFiles":                          nil,
+	"/snapshot.SnapshotManagement/GetSnapshotFile":                            nil,
 }
 
 func constMessage(raw string) connectMethod {
