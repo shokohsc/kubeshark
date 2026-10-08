@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/kubeshark/kubeshark/hub"
 	"github.com/kubeshark/kubeshark/misc"
@@ -33,7 +35,20 @@ func main() {
 		LogLevel:        *logLevel,
 		Version:         misc.Ver,
 	}
-	srv := hub.NewServer(cfg, hub.NewStore())
+	var verifier hub.TokenVerifier
+	if cfg.AuthEnabled {
+		restCfg, err := rest.InClusterConfig()
+		if err != nil {
+			log.Fatalf("AUTH_ENABLED is set but in-cluster config failed: %v", err)
+		}
+		cs, err := kubernetes.NewForConfig(restCfg)
+		if err != nil {
+			log.Fatalf("AUTH_ENABLED is set but kubernetes client creation failed: %v", err)
+		}
+		// audience must match the CLI's kubectl create token --audience
+		verifier = hub.NewK8sTokenVerifier(cs, "kubeshark-hub")
+	}
+	srv := hub.NewServer(cfg, hub.NewStore(), verifier)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("kubeshark hub listening on %s", addr)

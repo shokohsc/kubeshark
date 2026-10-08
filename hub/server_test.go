@@ -17,7 +17,7 @@ func doRequest(t *testing.T, h http.Handler, path string) *httptest.ResponseReco
 func TestRootServesServiceInfo(t *testing.T) {
 	cfg := Config{Version: "1.2.3"}
 
-	rec := doRequest(t, NewServer(cfg, NewStore()).Handler(), "/")
+	rec := doRequest(t, NewServer(cfg, NewStore(), nil).Handler(), "/")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET / status = %d, want 200", rec.Code)
@@ -38,7 +38,7 @@ func TestRootServesServiceInfo(t *testing.T) {
 }
 
 func TestEchoOK(t *testing.T) {
-	rec := doRequest(t, NewServer(Config{}, NewStore()).Handler(), "/echo")
+	rec := doRequest(t, NewServer(Config{}, NewStore(), nil).Handler(), "/echo")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /echo status = %d, want 200", rec.Code)
@@ -46,7 +46,7 @@ func TestEchoOK(t *testing.T) {
 }
 
 func TestUnknownRoute404(t *testing.T) {
-	rec := doRequest(t, NewServer(Config{}, NewStore()).Handler(), "/nope")
+	rec := doRequest(t, NewServer(Config{}, NewStore(), nil).Handler(), "/nope")
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /nope status = %d, want 404", rec.Code)

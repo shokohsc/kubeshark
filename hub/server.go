@@ -15,19 +15,25 @@ type Config struct {
 }
 
 type Server struct {
-	cfg   Config
-	store *Store
+	cfg      Config
+	store    *Store
+	verifier TokenVerifier
 }
 
-func NewServer(cfg Config, store *Store) *Server {
-	return &Server{cfg: cfg, store: store}
+// NewServer builds the hub server. verifier may be nil only when
+// !cfg.AuthEnabled; with auth enabled a nil verifier fails closed (all
+// requests 401).
+func NewServer(cfg Config, store *Store, verifier TokenVerifier) *Server {
+	return &Server{cfg: cfg, store: store, verifier: verifier}
 }
 
+// Handler returns the auth-wrapped mux; routes registered on the mux are
+// covered by the auth middleware.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/{$}", s.handleRoot)
 	mux.HandleFunc("/echo", s.handleEcho)
-	return mux
+	return s.requireAuth(mux)
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
