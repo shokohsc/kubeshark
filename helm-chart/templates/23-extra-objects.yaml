@@ -1,8 +1,0 @@
-{{- range .Values.tap.extraObjects }}
----
-{{- if kindIs "string" . }}
-{{ tpl . $ }}
-{{- else }}
-{{ tpl (toYaml .) $ }}
-{{- end }}
-{{- end }}

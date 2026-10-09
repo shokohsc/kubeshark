@@ -1,11 +1,10 @@
 # Cloud Storage for Snapshots
 
-This is a pointer to the authoritative cloud storage documentation maintained in
-the Helm chart:
+This is a pointer to the authoritative Kubeshark cloud storage documentation:
 
-**Source of truth**: `helm-chart/docs/snapshots_cloud_storage.md`
+**Source of truth**: see the Kubeshark docs
 
-Always read that file for the latest configuration details, including:
+Always read the Kubeshark docs for the latest configuration details, including:
 
 - Amazon S3 (static credentials, IRSA, cross-account AssumeRole)
 - Azure Blob Storage (storage key, Workload Identity / DefaultAzureCredential)
@@ -58,8 +57,7 @@ tap:
 
 ### Inline Values (Simplest Approach)
 
-Set credentials directly in values.yaml. The Helm chart creates the necessary
-ConfigMap/Secret resources automatically.
+Set credentials directly in values.yaml.
 
 **S3:**
 ```yaml
@@ -94,5 +92,4 @@ tap:
         container: snapshots
 ```
 
-For production setups with proper IAM integration, see the full documentation
-in `helm-chart/docs/snapshots_cloud_storage.md`.
+For production setups with proper IAM integration, see the Kubeshark docs.

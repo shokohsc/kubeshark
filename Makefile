@@ -144,17 +144,6 @@ test-integration-short: ## Run quick integration tests (skips long-running tests
 	rm -f $$LOG_FILE; \
 	exit $$status
 
-helm-test: ## Run Helm lint and unit tests.
-	helm lint ./helm-chart
-	helm unittest ./helm-chart
-
-helm-test-full: helm-test ## Run Helm tests with kubeconform schema validation.
-	helm template kubeshark ./helm-chart | kubeconform -strict -kubernetes-version 1.35.0 -summary
-	helm template kubeshark ./helm-chart -f ./helm-chart/tests/fixtures/values-s3.yaml | kubeconform -strict -kubernetes-version 1.35.0 -summary
-	helm template kubeshark ./helm-chart -f ./helm-chart/tests/fixtures/values-azblob.yaml | kubeconform -strict -kubernetes-version 1.35.0 -summary
-	helm template kubeshark ./helm-chart -f ./helm-chart/tests/fixtures/values-gcs.yaml | kubeconform -strict -kubernetes-version 1.35.0 -summary
-	helm template kubeshark ./helm-chart -f ./helm-chart/tests/fixtures/values-extra-objects.yaml | kubeconform -strict -kubernetes-version 1.35.0 -summary
-
 lint: ## Lint the source code.
 	golangci-lint run
 
@@ -163,15 +152,6 @@ kubectl-view-all-resources: ## This command outputs all Kubernetes resources usi
 
 kubectl-view-kubeshark-resources: ## This command outputs all Kubernetes resources in "kubeshark" namespace using YAML format and pipes it to VS Code
 	./kubectl.sh view-kubeshark-resources
-
-generate-helm-values: ## Generate the Helm values from config.yaml
-# 	[ -f ~/.kubeshark/config.yaml ] && mv ~/.kubeshark/config.yaml ~/.kubeshark/config.yaml.old
-	bin/kubeshark__ config>helm-chart/values.yaml
-# 	[ -f ~/.kubeshark/config.yaml.old ] && mv ~/.kubeshark/config.yaml.old ~/.kubeshark/config.yaml
-# 	sed -i 's/^license:.*/license: ""/' helm-chart/values.yaml && sed -i '1i # find a detailed description here: https://github.com/kubeshark/kubeshark/blob/master/helm-chart/README.md' helm-chart/values.yaml 
-
-generate-manifests: ## Generate the manifests from the Helm chart using default configuration
-	helm template kubeshark -n default ./helm-chart > ./manifests/complete.yaml
 
 logs-sniffer:
 	export LOGS_POD_PREFIX=kubeshark-worker-
@@ -242,18 +222,6 @@ exec-front:
 exec:
 	kubectl exec --stdin --tty $$(kubectl get pods | awk '$$1 ~ /^$(EXEC_POD_PREFIX)/' | awk 'END {print $$1}') -- /bin/sh
 
-helm-install:
-	cd helm-chart && helm install kubeshark . --set tap.docker.tag=$(TAG) && cd ..
-
-helm-install-debug:
-	cd helm-chart && helm install kubeshark . --set tap.docker.tag=$(TAG) --set tap.debug=true && cd ..
-
-helm-install-profile:
-	cd helm-chart && helm install kubeshark . --set tap.docker.tag=$(TAG) --set tap.pprof.enabled=true && cd ..
-
-helm-uninstall:
-	helm uninstall kubeshark
-
 proxy:
 	kubeshark proxy
 
@@ -268,13 +236,9 @@ release: ## Print release workflow instructions.
 	@echo "     rebuilding docker images without cutting a full release."
 	@echo ""
 	@echo "  2. make release-pr-kubeshark VERSION=x.y.z"
-	@echo "     Bump Helm Chart.yaml, build, open release PR on kubeshark."
+	@echo "     Build and open the kubeshark release PR."
 	@echo ""
-	@echo "  3. make release-pr-helm VERSION=x.y.z"
-	@echo "     Sync helm-chart/ into kubeshark.github.io, open helm PR."
-	@echo "     Requires release/vx.y.z branch (created by step 2)."
-	@echo ""
-	@echo "  Shortcut: make release-pr VERSION=x.y.z runs 1 → 2 → 3."
+	@echo "  Shortcut: make release-pr VERSION=x.y.z runs 1 → 2."
 	@echo ""
 	@echo "  After both PRs merge, create the release tag:"
 	@echo "  make release-tag VERSION=x.y.z"
@@ -295,27 +259,19 @@ release-siblings: _release-check-version ## Tag worker, hub, front with v$(VERSI
 		fi; \
 	done
 
-release-pr-kubeshark: _release-check-version ## Bump Chart.yaml, build, open release PR on kubeshark.
+release-pr-kubeshark: _release-check-version ## Build and open the kubeshark release PR.
 	@cd ../kubeshark && git checkout master && git pull
-	@NEW=$$(echo $(VERSION) | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/'); \
-	CUR=$$(awk '/^version:/ {gsub(/"/,"",$$2); print $$2; exit}' helm-chart/Chart.yaml); \
-	if [ "$$CUR" != "$$NEW" ]; then \
-		sed -i '' "s/^version:.*/version: \"$$NEW\"/" helm-chart/Chart.yaml; \
-	else \
-		echo "Chart.yaml already at $$NEW"; \
-	fi
 	@$(MAKE) build VER=$(VERSION)
 	@if [ "$(shell uname)" = "Darwin" ]; then \
 		codesign --sign - --force --preserve-metadata=entitlements,requirements,flags,runtime ./bin/kubeshark__; \
 	fi
-	@$(MAKE) generate-helm-values && $(MAKE) generate-manifests
 	@if git show-ref --verify --quiet refs/heads/release/v$(VERSION); then \
 		git branch -D release/v$(VERSION); \
 	fi
 	@git checkout -b release/v$(VERSION)
 	@git add -A .
 	@if ! git diff --cached --quiet; then \
-		git commit -m ":bookmark: Bump the Helm chart version to $(VERSION)"; \
+		git commit -m ":bookmark: Release v$(VERSION)"; \
 	else \
 		echo "nothing to commit"; \
 	fi
@@ -329,45 +285,10 @@ release-pr-kubeshark: _release-check-version ## Bump Chart.yaml, build, open rel
 			--reviewer corest; \
 	fi
 
-release-pr-helm: _release-check-version ## Sync helm-chart/ to kubeshark.github.io and open the helm PR. Requires release/v$(VERSION) branch (step 2).
-	@git fetch origin "refs/heads/release/v$(VERSION):refs/heads/release/v$(VERSION)" 2>/dev/null || true
-	@if ! git show-ref --verify --quiet refs/heads/release/v$(VERSION); then \
-		echo "ERROR: release/v$(VERSION) branch not found locally or on origin."; \
-		echo "Run 'make release-pr-kubeshark VERSION=$(VERSION)' first."; \
-		exit 1; \
-	fi
-	@git checkout release/v$(VERSION)
-	@cd ../kubeshark.github.io && git checkout master && git pull \
-		&& rm -rf charts/chart && mkdir -p charts/chart \
-		&& cp -r ../kubeshark/helm-chart/ charts/chart/
-	@cd ../kubeshark.github.io && \
-	if git show-ref --verify --quiet refs/heads/helm-v$(VERSION); then \
-		git branch -D helm-v$(VERSION); \
-	fi && \
-	git checkout -b helm-v$(VERSION) && \
-	git add -A . && \
-	if ! git diff --cached --quiet; then \
-		git commit -m ":sparkles: Update the Helm chart to v$(VERSION)"; \
-	else \
-		echo "nothing to commit"; \
-	fi && \
-	git push --force-with-lease -u origin helm-v$(VERSION) && \
-	if ! gh pr view helm-v$(VERSION) --json number >/dev/null 2>&1; then \
-		gh pr create --title ":sparkles: Helm chart v$(VERSION)" \
-			--body "Update Helm chart for release v$(VERSION)." \
-			--base master \
-			--reviewer corest; \
-	else \
-		echo "PR already exists for helm-v$(VERSION)"; \
-	fi && \
-	git checkout master
-	@cd ../kubeshark && git checkout master && git pull
-
-release-pr: release-siblings release-pr-kubeshark release-pr-helm ## Run release-siblings, release-pr-kubeshark, and release-pr-helm in sequence.
+release-pr: release-siblings release-pr-kubeshark ## Run release-siblings and release-pr-kubeshark in sequence.
 	@echo ""
 	@echo "Release PRs created (or already present):"
 	@echo "  - kubeshark: Review and merge the release PR."
-	@echo "  - kubeshark.github.io: Review and merge the helm chart PR."
 	@echo "Tag will be created automatically, or run: make release-tag VERSION=$(VERSION)"
 
 release-tag: _release-check-version ## Step 2: Tag master after release PR is merged. Idempotent; re-run to retrigger the release build.
@@ -390,12 +311,9 @@ release-dry-run:
 	# @cd ../tracer && git checkout master && git pull 
 	@cd ../hub && git checkout master && git pull
 	@cd ../front && git checkout master && git pull 
-	@cd ../kubeshark && sed -i "s/^version:.*/version: \"$(shell echo $(VERSION) | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)\..*/\1/')\"/" helm-chart/Chart.yaml && make
 	# @if [ "$(shell uname)" = "Darwin" ]; then \
 	# 	codesign --sign - --force --preserve-metadata=entitlements,requirements,flags,runtime ./bin/kubeshark__; \
 	# fi
-	@make generate-helm-values && make generate-manifests
-	@rm -rf ../kubeshark.github.io/charts/chart && mkdir ../kubeshark.github.io/charts/chart && cp -r helm-chart/ ../kubeshark.github.io/charts/chart/
 	@cd ../kubeshark.github.io/
 	@cd ../kubeshark
 

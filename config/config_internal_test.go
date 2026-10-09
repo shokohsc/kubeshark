@@ -390,11 +390,11 @@ func TestGetParsedValueInvalidValue(t *testing.T) {
 }
 
 // CreateDefaultConfig builds the struct literal that `kubeshark config`
-// serialises into helm-chart/values.yaml, and it sets Auth fields explicitly
+// serialises as the generated config, and it sets Auth fields explicitly
 // rather than leaving them to the `default:` struct tags. Two sources of the
 // same default drift silently: the literal wins at runtime, the tag is what a
-// reader checks, and the divergence only surfaces the next time someone runs
-// `make generate-helm-values`.
+// reader checks, and the divergence only surfaces the next time someone
+// inspects the generated config.
 //
 // The default role is the one worth pinning. An operator who never configured
 // authorization gets it applied to every caller, so a literal that disagrees
@@ -414,7 +414,7 @@ func TestCreateDefaultConfig_AuthDefaultsMatchStructTags(t *testing.T) {
 	}
 	if cfg.Tap.Auth.DefaultRole != want {
 		t.Errorf("CreateDefaultConfig sets DefaultRole=%q, struct tag says %q; "+
-			"generate-helm-values would write the former into values.yaml",
+			"the generated config would take the former",
 			cfg.Tap.Auth.DefaultRole, want)
 	}
 }
@@ -443,7 +443,7 @@ func TestDefaultConfig_KeepsServiceMonitorBlock(t *testing.T) {
 
 	sm := parsed.Tap.Metrics.ServiceMonitor
 	if sm == nil {
-		t.Fatal("tap.metrics.serviceMonitor missing from the generated config; make generate-helm-values would drop it from values.yaml")
+		t.Fatal("tap.metrics.serviceMonitor missing from the generated config")
 	}
 	if enabled, ok := sm["enabled"].(bool); !ok || enabled {
 		t.Errorf("tap.metrics.serviceMonitor.enabled = %v, want false", sm["enabled"])
