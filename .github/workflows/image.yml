@@ -14,10 +14,13 @@ permissions:
   packages: write
 
 jobs:
-  hub-image:
-    name: Build, scan and publish hub image
+  image:
+    name: Build, scan and publish ${{ matrix.image }} image
     runs-on: ubuntu-latest
-    # Single job: fail-fast is implicit — a failing build or scan fails the workflow.
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [hub, front, worker]
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -40,7 +43,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/hub
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref_name == 'main' || github.ref_name == 'master' }}
             type=sha,prefix=sha-
@@ -60,12 +63,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          strategy:
-            fail-fast: false
-            matrix:
-              image: [hub, front, worker]
           build-args: |
             VERSION=${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
+            BINARY=${{ matrix.image }}
 
       # ponytail: grype's `only-fixed: true` is the equivalent of trivy's `ignore-unfixed: true`.
       - name: Scan image for vulnerabilities
