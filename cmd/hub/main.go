@@ -24,6 +24,9 @@ const ringSize = 100000
 func main() {
 	port := flag.Int("port", 8080, "port to listen on")
 	logLevel := flag.String("loglevel", "warning", "log level: debug, info, warning, error, disabled")
+	// hubFQDN is advertised to clients (front, workers) so they can target this
+	// hub by its cluster FQDN; set from HUB_FQDN or -hub-fqdn.
+	hubFQDN := flag.String("hub-fqdn", os.Getenv("HUB_FQDN"), "hub FQDN to advertise (e.g. kubeshark-hub.default.svc.cluster.local)")
 	flag.Parse()
 
 	zerolog.SetGlobalLevel(levelOf(*logLevel))
@@ -35,6 +38,7 @@ func main() {
 		RingSize:        ringSize,
 		LogLevel:        *logLevel,
 		Version:         misc.Ver,
+		HubFQDN:         *hubFQDN,
 	}
 	var verifier hub.TokenVerifier
 	if cfg.AuthEnabled {

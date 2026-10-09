@@ -15,6 +15,9 @@ type Config struct {
 	RingSize        int
 	LogLevel        string
 	Version         string
+	// HubFQDN is this hub's cluster FQDN; advertised so the frontend and
+	// workers can target the hub without a baked-in address.
+	HubFQDN string
 }
 
 type Server struct {
@@ -103,7 +106,8 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(struct {
 		Service string `json:"service"`
 		Version string `json:"version"`
-	}{Service: "kubeshark-hub", Version: s.cfg.Version})
+		HubURL  string `json:"hubUrl,omitempty"`
+	}{Service: "kubeshark-hub", Version: s.cfg.Version, HubURL: s.cfg.HubFQDN})
 }
 
 func (s *Server) handleEcho(w http.ResponseWriter, r *http.Request) {

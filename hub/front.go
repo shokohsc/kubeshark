@@ -38,10 +38,14 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMetadataVersion(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{
+	meta := map[string]any{
 		"ver":             s.cfg.Version,
 		"launchTimestamp": s.launch.UnixMilli(),
-	})
+	}
+	if s.cfg.HubFQDN != "" {
+		meta["hubUrl"] = s.cfg.HubFQDN
+	}
+	writeJSON(w, meta)
 }
 
 func (s *Server) handleSettingsStatus(w http.ResponseWriter, _ *http.Request) {
