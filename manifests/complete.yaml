@@ -1,120 +1,4 @@
 ---
-# Source: kubeshark/templates/17-network-policies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  labels:
-    helm.sh/chart: kubeshark-53.5.0
-    app.kubernetes.io/name: kubeshark
-    app.kubernetes.io/instance: kubeshark
-    app.kubernetes.io/version: "53.5.0"
-    app.kubernetes.io/managed-by: Helm
-  name: kubeshark-hub-network-policy
-  namespace: default
-spec:
-  podSelector:
-    matchLabels:
-      app.kubeshark.com/app: hub
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
-    - ports:
-        - protocol: TCP
-          port: 9100
-  egress:
-    - {}
-
----
-# Source: kubeshark/templates/17-network-policies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  labels:
-    helm.sh/chart: kubeshark-53.5.0
-    app.kubernetes.io/name: kubeshark
-    app.kubernetes.io/instance: kubeshark
-    app.kubernetes.io/version: "53.5.0"
-    app.kubernetes.io/managed-by: Helm
-  annotations:
-  name: kubeshark-front-network-policy
-  namespace: default
-spec:
-  podSelector:
-    matchLabels:
-      app.kubeshark.com/app: front
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
-  egress:
-    - {}
-
----
-# Source: kubeshark/templates/17-network-policies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  labels:
-    helm.sh/chart: kubeshark-53.5.0
-    app.kubernetes.io/name: kubeshark
-    app.kubernetes.io/instance: kubeshark
-    app.kubernetes.io/version: "53.5.0"
-    app.kubernetes.io/managed-by: Helm
-  annotations:
-  name: kubeshark-dex-network-policy
-  namespace: default
-spec:
-  podSelector:
-    matchLabels:
-      app.kubeshark.com/app: dex
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 5556
-  egress:
-    - {}
-
----
-# Source: kubeshark/templates/17-network-policies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  labels:
-    helm.sh/chart: kubeshark-53.5.0
-    app.kubernetes.io/name: kubeshark
-    app.kubernetes.io/instance: kubeshark
-    app.kubernetes.io/version: "53.5.0"
-    app.kubernetes.io/managed-by: Helm
-  annotations:
-  name: kubeshark-worker-network-policy
-  namespace: default
-spec:
-  podSelector:
-    matchLabels:
-      app.kubeshark.com/app: worker
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 48999
-        - protocol: TCP
-          port: 49100
-  egress:
-    - {}
-
----
 # Source: kubeshark/templates/01-service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -624,7 +508,7 @@ spec:
           - /bin/sh
           - -c
           - mkdir -p /sys/fs/bpf && mount | grep -q '/sys/fs/bpf' || mount -t bpf bpf /sys/fs/bpf
-          image: 'docker.io/kubeshark/worker:v53.5'
+          image: 'ghcr.io/shokohsc/worker:v53.5'
           imagePullPolicy: Always
           name: mount-bpf
           securityContext:
@@ -663,7 +547,7 @@ spec:
             - '500Mi'
             - -cloud-api-url
             - 'https://api.kubeshark.com'
-          image: 'docker.io/kubeshark/worker:v53.5'
+          image: 'ghcr.io/shokohsc/worker:v53.5'
           imagePullPolicy: Always
           name: sniffer
           ports:
@@ -744,7 +628,7 @@ spec:
             - -disable-tls-log
             - -loglevel
             - 'warning'
-          image: 'docker.io/kubeshark/worker:v53.5'
+          image: 'ghcr.io/shokohsc/worker:v53.5'
           imagePullPolicy: Always
           name: tracer
           env:
@@ -887,20 +771,6 @@ spec:
             - "8080"
             - -loglevel
             - 'warning'
-            - -capture-stop-after
-            - "5m"
-            - -snapshot-size-limit
-            - '20Gi'
-            - -dissector-image
-            - 'docker.io/kubeshark/worker:v53.5'
-            - -dissector-cpu
-            - '1'
-            - -dissector-memory
-            - '4Gi'
-            - -dissector-storage-size
-            - '20Gi'
-            - -cloud-api-url
-            - 'https://api.kubeshark.com'
           env:
           - name: POD_NAME
             valueFrom:
@@ -916,7 +786,7 @@ spec:
             value: 'production'
           - name: PROFILING_ENABLED
             value: 'false'
-          image: 'docker.io/kubeshark/hub:v53.5'
+          image: 'ghcr.io/shokohsc/hub:latest'
           imagePullPolicy: Always
           readinessProbe:
             periodSeconds: 5
@@ -1047,7 +917,7 @@ spec:
               value: 'false'
             - name: REACT_APP_SENTRY_ENVIRONMENT
               value: 'production'
-          image: 'docker.io/kubeshark/front:v53.5'
+          image: 'ghcr.io/shokohsc/front:v53.5'
           imagePullPolicy: Always
           name: kubeshark-front
           livenessProbe:
