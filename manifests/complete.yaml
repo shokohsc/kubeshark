@@ -74,76 +74,6 @@ stringData:
 
 
 ---
-# Source: kubeshark/templates/11-nginx-config-map.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kubeshark-nginx-config-map
-  namespace: default
-  labels:
-    helm.sh/chart: kubeshark-53.5.0
-    app.kubernetes.io/name: kubeshark
-    app.kubernetes.io/instance: kubeshark
-    app.kubernetes.io/version: "53.5.0"
-    app.kubernetes.io/managed-by: Helm
-data:
-  default.conf: |
-    server {
-      listen 8080;
-      listen [::]:8080;
-      access_log /dev/stdout;
-      error_log /dev/stdout;
-
-      client_body_buffer_size     64k;
-      client_header_buffer_size   32k;
-      large_client_header_buffers 8 64k;
-
-      proxy_buffer_size 64k;
-      proxy_buffers 4 128k;
-      proxy_busy_buffers_size 128k;
-
-      location /api {
-        rewrite ^/api(.*)$ $1 break;
-        proxy_pass http://kubeshark-hub;
-        proxy_set_header   X-Forwarded-For $remote_addr;
-        proxy_set_header   Host $http_host;
-        proxy_set_header Upgrade websocket;
-        proxy_set_header Connection Upgrade;
-        proxy_set_header  Authorization $http_authorization;
-        proxy_pass_header Authorization;
-        proxy_connect_timeout 4s;
-        # Disable buffering for gRPC/Connect streaming
-        client_max_body_size 0;
-        proxy_request_buffering off;
-        proxy_buffering off;
-        proxy_pass_request_headers      on;
-      }
-
-      location /saml {
-        rewrite ^/saml(.*)$ /saml$1 break;
-        proxy_pass http://kubeshark-hub;
-        proxy_set_header   X-Forwarded-For $remote_addr;
-        proxy_set_header   Host $http_host;
-        proxy_connect_timeout 4s;
-        proxy_read_timeout 120s;
-        proxy_send_timeout 12s;
-        proxy_pass_request_headers on;
-      }
-
-      location / {
-        root   /usr/share/nginx/html;
-        index  index.html index.htm;
-        try_files $uri $uri/ /index.html;
-        expires -1;
-        add_header Cache-Control no-cache;
-      }
-      error_page   500 502 503 504  /50x.html;
-      location = /50x.html {
-        root   /usr/share/nginx/html;
-      }
-    }
-
----
 # Source: kubeshark/templates/12-config-map.yaml
 kind: ConfigMap
 apiVersion: v1
@@ -503,51 +433,18 @@ spec:
       name: kubeshark-worker-daemon-set
       namespace: kubeshark
     spec:
-      initContainers:
-        - command:
-          - /bin/sh
-          - -c
-          - mkdir -p /sys/fs/bpf && mount | grep -q '/sys/fs/bpf' || mount -t bpf bpf /sys/fs/bpf
-          image: 'ghcr.io/shokohsc/worker:v53.5'
-          imagePullPolicy: Always
-          name: mount-bpf
-          securityContext:
-            privileged: true
-          volumeMounts:
-          - mountPath: /sys
-            name: sys
-            mountPropagation: Bidirectional
       containers:
         - command:
-            - ./worker
-            - -i
-            - any
+            - /service
             - -port
             - '48999'
             - -metrics-port
             - '49100'
-            - -packet-capture
-            - 'best'
-            - -loglevel
-            - 'warning'
-            - -servicemesh
-            - -procfs
-            - /hostproc
-            - -resolution-strategy
-            - 'auto'
-            - -staletimeout
-            - '30'
-            - -tcp-flow-full-timeout
-            - '1200'
-            - -udp-flow-full-timeout
-            - '1200'
-            - -storage-size
-            - '10Gi'
-            - -capture-db-max-size
-            - '500Mi'
-            - -cloud-api-url
-            - 'https://api.kubeshark.com'
-          image: 'ghcr.io/shokohsc/worker:v53.5'
+            - -hub-url
+            - 'http://kubeshark-hub.default.svc.cluster.local'
+          # -hub-url targets the hub Service by its cluster FQDN (must match the
+          # namespace this chart installs into) instead of the kubeshark cloud.
+          image: 'ghcr.io/shokohsc/worker:latest'
           imagePullPolicy: Always
           name: sniffer
           ports:
@@ -618,72 +515,6 @@ spec:
               mountPropagation: HostToContainer
             - mountPath: /app/data
               name: data
-            - mountPath: /var/run/secrets/kubeshark/hub-token
-              name: hub-internal-token
-              readOnly: true
-        - command:
-            - ./tracer
-            - -procfs
-            - /hostproc
-            - -disable-tls-log
-            - -loglevel
-            - 'warning'
-          image: 'ghcr.io/shokohsc/worker:v53.5'
-          imagePullPolicy: Always
-          name: tracer
-          env:
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-          - name: POD_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          - name: PROFILING_ENABLED
-            value: 'false'
-          - name: SENTRY_ENABLED
-            value: 'false'
-          - name: SENTRY_ENVIRONMENT
-            value: 'production'
-          - name: HUB_INTERNAL_TOKEN_PATH
-            value: /var/run/secrets/kubeshark/hub-token/token
-          resources:
-            limits:
-              
-              
-              memory: 5Gi
-              
-            requests:
-              
-              cpu: 50m
-              
-              
-              memory: 50Mi
-              
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - mountPath: /hostproc
-              name: proc
-              readOnly: true
-            - mountPath: /sys
-              name: sys
-              readOnly: true
-              mountPropagation: HostToContainer
-            - mountPath: /app/data
-              name: data
-            - mountPath: /etc/os-release
-              name: os-release
-              readOnly: true
-            - mountPath: /hostroot
-              mountPropagation: HostToContainer
-              name: root
-              readOnly: true
             - mountPath: /var/run/secrets/kubeshark/hub-token
               name: hub-internal-token
               readOnly: true
@@ -766,7 +597,7 @@ spec:
       containers:
         - name: hub
           command:
-            - ./hub
+            - /service
             - -port
             - "8080"
             - -loglevel
@@ -780,6 +611,10 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          # Advertised to the front and the workers so they can target this hub
+          # by its cluster FQDN (must match the namespace this chart installs into).
+          - name: HUB_FQDN
+            value: 'kubeshark-hub.default.svc.cluster.local'
           - name: SENTRY_ENABLED
             value: 'false'
           - name: SENTRY_ENVIRONMENT
@@ -881,6 +716,10 @@ spec:
     spec:
       containers:
         - env:
+            # HUB_URL is the hub Service's cluster FQDN this front proxies
+            # /api, /saml and /ws to (must match the namespace the chart installs into).
+            - name: HUB_URL
+              value: 'http://kubeshark-hub.default.svc.cluster.local'
             - name: REACT_APP_AUTH_ENABLED
               value: 'false'
             - name: REACT_APP_AUTH_TYPE
@@ -917,7 +756,7 @@ spec:
               value: 'false'
             - name: REACT_APP_SENTRY_ENVIRONMENT
               value: 'production'
-          image: 'ghcr.io/shokohsc/front:v53.5'
+          image: 'ghcr.io/shokohsc/front:latest'
           imagePullPolicy: Always
           name: kubeshark-front
           livenessProbe:
@@ -942,11 +781,6 @@ spec:
             requests:
               cpu: 50m
               memory: 50Mi
-          volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d/default.conf
-              subPath: default.conf
-              readOnly: true
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -956,9 +790,5 @@ spec:
                 operator: In
                 values:
                 - linux
-      volumes:
-        - name: nginx-config
-          configMap:
-            name: kubeshark-nginx-config-map
       dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: kubeshark-service-account
