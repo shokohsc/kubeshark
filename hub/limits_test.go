@@ -121,7 +121,7 @@ func TestNoCommunityLimits(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/health/hub", "/health/workers", "/worker", "/whoami", "/mcp", "/license", "/"} {
+	for _, path := range []string{"/health/hub", "/health/workers", "/worker", "/whoami", "/flows2", "/mcp", "/license", "/"} {
 		rec = doRequest(t, h, path)
 		if rec.Code == http.StatusOK {
 			var body any

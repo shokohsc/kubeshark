@@ -75,7 +75,7 @@ test: ## Run cli tests.
 	@go test ./... -coverpkg=./... -race -coverprofile=coverage.out -covermode=atomic
 
 
-hub-coverage:
+hub-coverage: ## Enforce 80% hub test coverage.
 	go test ./hub/... -coverpkg=./hub/... -covermode=atomic -coverprofile=hub_coverage.out -race
 	@total=$$(go tool cover -func=hub_coverage.out | tail -1 | awk '{print $$3}' | tr -d '%%'); \
 	echo "hub coverage: $$total%%"; \
