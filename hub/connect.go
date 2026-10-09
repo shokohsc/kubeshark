@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -91,8 +92,13 @@ func connectUnary(w http.ResponseWriter, r *http.Request, h func(ctx context.Con
 		writeConnectError(w, http.StatusUnsupportedMediaType, "unsupported content type "+ct)
 		return
 	}
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeConnectError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		writeConnectError(w, http.StatusBadRequest, "read request body: "+err.Error())
 		return
 	}

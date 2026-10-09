@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"k8s.io/client-go/kubernetes"
@@ -51,8 +52,17 @@ func main() {
 	srv := hub.NewServer(cfg, hub.NewStore(), verifier)
 
 	addr := fmt.Sprintf(":%d", *port)
+	// ReadHeaderTimeout/IdleTimeout guard the listener against slow-loris and
+	// idle-connection churn; Read/Write timeouts stay unset (long-lived Connect
+	// and WebSocket streams must not be cut).
+	srvHTTP := &http.Server{
+		Addr:              addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	log.Printf("kubeshark hub listening on %s", addr)
-	if err := http.ListenAndServe(addr, srv.Handler()); err != nil {
+	if err := srvHTTP.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

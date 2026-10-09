@@ -398,8 +398,8 @@ func TestGetParsedValueInvalidValue(t *testing.T) {
 //
 // The default role is the one worth pinning. An operator who never configured
 // authorization gets it applied to every caller, so a literal that disagrees
-// with the tag rewrites the chart's default posture from admin to read-only
-// and 403s an install that used to work.
+// with the tag rewrites the generated config's default posture from admin to
+// read-only and 403s an install that used to work.
 func TestCreateDefaultConfig_AuthDefaultsMatchStructTags(t *testing.T) {
 	cfg := CreateDefaultConfig()
 

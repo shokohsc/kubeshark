@@ -28,9 +28,11 @@ type Store struct {
 const defaultRingSize = 100000
 
 // Script is a stored hub script as the front CRUD endpoints round-trip it.
+// ponytail: the field is Title, not Name — the front bundle's editor binds
+// scripts[].title, so a "name" key would render as a blank title.
 type Script struct {
 	ID       string `json:"id"`
-	Name     string `json:"name"`
+	Title    string `json:"title"`
 	Language string `json:"language"`
 	Code     string `json:"code"`
 	Active   bool   `json:"active"`

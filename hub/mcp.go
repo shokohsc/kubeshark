@@ -87,8 +87,7 @@ func (s *Server) handleMCPInfo(w http.ResponseWriter, _ *http.Request) {
 // failures are non-2xx plain-text bodies.
 func (s *Server) handleMCPCallTool(w http.ResponseWriter, r *http.Request) {
 	var req mcpCallRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if slices.Contains(mcpDataPlaneTools, req.Name) {

@@ -123,8 +123,12 @@ func TestSettingsDissectionRoundTrip(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /settings/status status = %d, want 200", rec.Code)
 	}
-	if got := decodeFrontJSON(t, rec); got["dissection"] != true {
-		t.Errorf("settings/status dissection = %v, want default true", got["dissection"])
+	got := decodeFrontJSON(t, rec)
+	if got["enabled"] != true {
+		t.Errorf("settings/status enabled = %v, want default true", got["enabled"])
+	}
+	if eds, ok := got["enabledDissectors"].([]any); !ok || len(eds) != 0 {
+		t.Errorf("settings/status enabledDissectors = %v, want empty array", eds)
 	}
 
 	rec = doRequest(t, h, "/settings/dissection")
@@ -149,8 +153,9 @@ func TestSettingsDissectionRoundTrip(t *testing.T) {
 	}
 
 	rec = doRequest(t, h, "/settings/status")
-	if got := decodeFrontJSON(t, rec); got["dissection"] != false {
-		t.Errorf("settings/status after POST = %v, want dissection false", got)
+	got = decodeFrontJSON(t, rec)
+	if got["enabled"] != false {
+		t.Errorf("settings/status after POST = %v, want enabled false", got)
 	}
 }
 
@@ -173,15 +178,38 @@ func TestScriptsCRUD(t *testing.T) {
 		return got
 	}
 
-	rec := doFront(t, h, http.MethodPost, "/scripts", `{"id":"s1","name":"hello","language":"javascript","code":"1+1"}`)
+	rec := doFront(t, h, http.MethodPost, "/scripts", `{"id":"s1","title":"hello","language":"javascript","code":"1+1"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /scripts status = %d, want 200", rec.Code)
 	}
-	if got := decodeFrontJSON(t, rec); got["id"] != "s1" || got["name"] != "hello" {
+	if got := decodeFrontJSON(t, rec); got["id"] != "s1" || got["title"] != "hello" {
 		t.Errorf("POST /scripts body = %v, want stored script", got)
 	}
-	if scripts := list(t); len(scripts) != 1 || scripts[0]["id"] != "s1" {
-		t.Errorf("GET /scripts after create = %v, want one script s1", scripts)
+
+	rec = doFront(t, h, http.MethodPost, "/scripts", `{"title":"autoid","language":"javascript","code":"1+2"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /scripts without id status = %d, want 200", rec.Code)
+	}
+	autoID, _ := decodeFrontJSON(t, rec)["id"].(string)
+	if autoID == "" {
+		t.Fatalf("POST /scripts without id returned empty id, want a generated one")
+	}
+
+	findID := func(t *testing.T, id string) map[string]any {
+		t.Helper()
+		for _, script := range list(t) {
+			if script["id"] == id {
+				return script
+			}
+		}
+		t.Fatalf("script %q not found in GET /scripts", id)
+		return nil
+	}
+	if got := findID(t, "s1"); got["title"] != "hello" {
+		t.Errorf("script s1 title = %v, want hello", got["title"])
+	}
+	if got := findID(t, autoID); got["title"] != "autoid" {
+		t.Errorf("autoid script title = %v, want autoid", got["title"])
 	}
 
 	rec = doFront(t, h, http.MethodPost, "/scripts/exec", `{"id":"s1"}`)
@@ -192,36 +220,36 @@ func TestScriptsCRUD(t *testing.T) {
 		t.Errorf("POST /scripts/exec body = %v, want {status:ok}", got)
 	}
 
-	rec = doFront(t, h, http.MethodPut, "/scripts/s1", `{"name":"renamed","language":"javascript","code":"2+2"}`)
+	rec = doFront(t, h, http.MethodPut, "/scripts/s1", `{"title":"renamed","language":"javascript","code":"2+2"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT /scripts/s1 status = %d, want 200", rec.Code)
 	}
-	if scripts := list(t); len(scripts) != 1 || scripts[0]["name"] != "renamed" || scripts[0]["id"] != "s1" {
-		t.Errorf("GET /scripts after PUT = %v, want one edited script s1", scripts)
+	if got := findID(t, "s1"); got["title"] != "renamed" {
+		t.Errorf("script s1 title after PUT = %v, want renamed", got["title"])
 	}
 
 	rec = doFront(t, h, http.MethodPost, "/scripts/s1/activate", `{}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /scripts/s1/activate status = %d, want 200", rec.Code)
 	}
-	if scripts := list(t); len(scripts) != 1 || scripts[0]["active"] != true {
-		t.Errorf("GET /scripts after activate = %v, want active true", scripts)
+	if got := findID(t, "s1"); got["active"] != true {
+		t.Errorf("script s1 active after activate = %v, want true", got["active"])
 	}
 
 	rec = doFront(t, h, http.MethodPost, "/scripts/s1/deactivate", `{}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /scripts/s1/deactivate status = %d, want 200", rec.Code)
 	}
-	if scripts := list(t); len(scripts) != 1 || scripts[0]["active"] != false {
-		t.Errorf("GET /scripts after deactivate = %v, want active false", scripts)
+	if got := findID(t, "s1"); got["active"] != false {
+		t.Errorf("script s1 active after deactivate = %v, want false", got["active"])
 	}
 
 	rec = doFront(t, h, http.MethodDelete, "/scripts/s1", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("DELETE /scripts/s1 status = %d, want 200", rec.Code)
 	}
-	if scripts := list(t); len(scripts) != 0 {
-		t.Errorf("GET /scripts after DELETE = %v, want empty list", scripts)
+	if scripts := list(t); len(scripts) != 1 || scripts[0]["id"] != autoID {
+		t.Errorf("GET /scripts after DELETE = %v, want only the autoid script", scripts)
 	}
 
 	for _, tc := range []struct {
@@ -327,8 +355,20 @@ func TestMetadataVersion(t *testing.T) {
 		t.Fatalf("GET /metadata/version status = %d, want 200", rec.Code)
 	}
 	got := decodeFrontJSON(t, rec)
-	if v, ok := got["version"].(string); !ok || v != "9.9.9" {
-		t.Errorf("metadata/version body = %v, want {version:9.9.9}", got)
+	if v, ok := got["ver"].(string); !ok || v != "9.9.9" {
+		t.Errorf("metadata/version body = %v, want {ver:9.9.9 launchTimestamp:...}", got)
+	}
+	if _, ok := got["launchTimestamp"].(float64); !ok {
+		t.Errorf("metadata/version launchTimestamp = %v, want a millisecond timestamp", got["launchTimestamp"])
+	}
+}
+
+func TestOversizedBodyRejected(t *testing.T) {
+	h := NewServer(Config{}, NewStore(), nil).Handler()
+
+	rec := doFront(t, h, http.MethodPost, "/license", `{"license":"`+strings.Repeat("x", maxBodyBytes+1)+`"}`)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("POST /license oversized body status = %d, want 413", rec.Code)
 	}
 }
 

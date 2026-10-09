@@ -1,0 +1,5 @@
+.git
+bin
+*.out
+coverage.out
+hub_coverage.out

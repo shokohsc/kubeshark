@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"slices"
@@ -71,8 +72,9 @@ func extractCredential(h http.Header) (value string, isLicense bool) {
 	return "", false
 }
 
-// subjectKey carries the verified token subject (e.g. "ns:name") from the
-// auth middleware to handlers (GET /whoami); unexported to stay package-private.
+// subjectKey carries the verified token subject verbatim, e.g.
+// "system:serviceaccount:ns:name" for a ServiceAccount token, from the auth
+// middleware to handlers (GET /whoami); unexported to stay package-private.
 type subjectKey struct{}
 
 // requireAuth wraps next with the auth middleware: pass-through when auth is
@@ -103,11 +105,27 @@ func (s *Server) authorizedSubject(r *http.Request) (string, bool) {
 	credential, isLicense := extractCredential(r.Header)
 	switch {
 	case isLicense:
-		return "", s.cfg.License != "" && credential == s.cfg.License
+		if s.cfg.License == "" || len(credential) != len(s.cfg.License) {
+			return "", false
+		}
+		return "", subtle.ConstantTimeCompare([]byte(credential), []byte(s.cfg.License)) == 1
 	case credential != "" && s.verifier != nil:
 		subject, err := s.verifier.Verify(r.Context(), credential)
-		return subject, err == nil && slices.Contains(s.cfg.ServiceAccounts, subject)
+		if err != nil {
+			return "", false
+		}
+		return subject, s.subjectAllowed(subject)
 	default:
 		return "", false
 	}
+}
+
+// subjectAllowed reports whether a verified subject is allowlisted. Kubernetes
+// returns "system:serviceaccount:<ns>:<name>" while cfg.ServiceAccounts is
+// configured as bare "<ns>:<name>", so both forms are accepted.
+func (s *Server) subjectAllowed(subject string) bool {
+	if slices.Contains(s.cfg.ServiceAccounts, subject) {
+		return true
+	}
+	return slices.Contains(s.cfg.ServiceAccounts, strings.TrimPrefix(subject, "system:serviceaccount:"))
 }

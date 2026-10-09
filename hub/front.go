@@ -1,7 +1,8 @@
 package hub
 
 import (
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 )
 
@@ -37,11 +38,18 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMetadataVersion(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{"version": s.cfg.Version})
+	writeJSON(w, map[string]any{
+		"ver":             s.cfg.Version,
+		"launchTimestamp": s.launch.UnixMilli(),
+	})
 }
 
 func (s *Server) handleSettingsStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, s.store.Settings())
+	// ponytail: enabledDissectors stays empty — no dissector catalogue in this build.
+	writeJSON(w, map[string]any{
+		"enabled":           s.dissectionEnabled(),
+		"enabledDissectors": []string{},
+	})
 }
 
 func (s *Server) handleGetDissection(w http.ResponseWriter, _ *http.Request) {
@@ -52,8 +60,7 @@ func (s *Server) handlePostDissection(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	s.store.SetSetting("dissection", req.Enabled)
@@ -71,11 +78,23 @@ func (s *Server) handleGetScripts(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.store.Scripts())
 }
 
+// newScriptID assigns a fresh, unguessable id when the front creates a script
+// without one; ids given by the client are kept verbatim.
+func newScriptID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err) // crypto/rand is expected to work in a server process
+	}
+	return hex.EncodeToString(b[:])
+}
+
 func (s *Server) handlePostScript(w http.ResponseWriter, r *http.Request) {
 	var script Script
-	if err := json.NewDecoder(r.Body).Decode(&script); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &script) {
 		return
+	}
+	if script.ID == "" {
+		script.ID = newScriptID()
 	}
 	s.store.PutScript(script)
 	writeJSON(w, script)
@@ -88,8 +107,7 @@ func (s *Server) handlePutScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var script Script
-	if err := json.NewDecoder(r.Body).Decode(&script); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &script) {
 		return
 	}
 	script.ID = id // the path id is authoritative over the body
@@ -150,8 +168,7 @@ func (s *Server) handleLicensePush(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		License string `json:"license"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	s.store.SetLicense(req.License)

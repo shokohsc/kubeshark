@@ -240,7 +240,7 @@ release: ## Print release workflow instructions.
 	@echo ""
 	@echo "  Shortcut: make release-pr VERSION=x.y.z runs 1 → 2."
 	@echo ""
-	@echo "  After both PRs merge, create the release tag:"
+	@echo "  After the release PR merges, create the release tag:"
 	@echo "  make release-tag VERSION=x.y.z"
 
 # Internal: validate VERSION before any release-* target runs.
@@ -291,7 +291,7 @@ release-pr: release-siblings release-pr-kubeshark ## Run release-siblings and re
 	@echo "  - kubeshark: Review and merge the release PR."
 	@echo "Tag will be created automatically, or run: make release-tag VERSION=$(VERSION)"
 
-release-tag: _release-check-version ## Step 2: Tag master after release PR is merged. Idempotent; re-run to retrigger the release build.
+release-tag: _release-check-version ## Tag: Tag master after release PR is merged. Idempotent; re-run to retrigger the release build.
 	@echo "Verifying release PR was merged..."
 	@if ! gh pr list --state merged --head release/v$(VERSION) --json number --jq '.[0].number' | grep -q .; then \
 		echo "Error: No merged PR found for release/v$(VERSION). Merge the PR first."; \
@@ -314,8 +314,6 @@ release-dry-run:
 	# @if [ "$(shell uname)" = "Darwin" ]; then \
 	# 	codesign --sign - --force --preserve-metadata=entitlements,requirements,flags,runtime ./bin/kubeshark__; \
 	# fi
-	@cd ../kubeshark.github.io/
-	@cd ../kubeshark
 
 branch:
 	@cd ../worker && git checkout master && git pull && git checkout -b $(name); git push --set-upstream origin $(name)

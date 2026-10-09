@@ -142,6 +142,28 @@ func TestBearerPrefixStripped(t *testing.T) {
 	}
 }
 
+func TestServiceAccountSubjectForms(t *testing.T) {
+	cfg := Config{AuthEnabled: true, ServiceAccounts: []string{"default:kubeshark-cli"}}
+	// Kubernetes returns the full prefix for SA token reviews; the allowlist
+	// stores the bare ns:name form, so both must authenticate.
+	for _, subject := range []string{
+		"default:kubeshark-cli",
+		"system:serviceaccount:default:kubeshark-cli",
+	} {
+		v := &stubVerifier{subject: subject}
+		rec := doAuthRequest(t, NewServer(cfg, NewStore(), v).Handler(), "X-Kubeshark-Authorization", "tok")
+		if rec.Code != http.StatusOK {
+			t.Errorf("subject %q status = %d, want 200", subject, rec.Code)
+		}
+	}
+
+	v := &stubVerifier{subject: "system:serviceaccount:other:sa"}
+	rec := doAuthRequest(t, NewServer(cfg, NewStore(), v).Handler(), "X-Kubeshark-Authorization", "tok")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("non-allowlisted prefixed subject status = %d, want 401", rec.Code)
+	}
+}
+
 func TestK8sTokenVerifier_TokenReview(t *testing.T) {
 	const audience = "kubeshark-hub"
 

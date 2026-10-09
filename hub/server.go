@@ -3,10 +3,13 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 type Config struct {
-	AuthEnabled     bool
+	AuthEnabled bool
+	// ServiceAccounts allowlists verified subjects as bare "<ns>:<name>"; the
+	// full "system:serviceaccount:<ns>:<name>" form from TokenReview also matches.
 	ServiceAccounts []string
 	License         string
 	RingSize        int
@@ -18,6 +21,7 @@ type Server struct {
 	cfg      Config
 	store    *Store
 	verifier TokenVerifier
+	launch   time.Time
 }
 
 // NewServer builds the hub server. verifier may be nil only when
@@ -25,7 +29,7 @@ type Server struct {
 // requests 401).
 func NewServer(cfg Config, store *Store, verifier TokenVerifier) *Server {
 	store.setRingSize(cfg.RingSize)
-	return &Server{cfg: cfg, store: store, verifier: verifier}
+	return &Server{cfg: cfg, store: store, verifier: verifier, launch: time.Now()}
 }
 
 // Handler returns the auth-wrapped mux; routes registered on the mux are
