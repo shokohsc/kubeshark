@@ -38,6 +38,11 @@ jobs:
           echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Publishing MCP server for version: ${VERSION}"
 
+      - name: Resolve publisher metadata
+        id: meta
+        shell: bash
+        run: echo "owner_lcase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Download SHA256 files from release
         shell: bash
         run: |
@@ -45,7 +50,7 @@ jobs:
           mkdir -p bin
           echo "Downloading SHA256 checksums from release ${VERSION}..."
           for platform in darwin_arm64 darwin_amd64 linux_arm64 linux_amd64 windows_amd64; do
-            url="https://github.com/kubeshark/kubeshark/releases/download/${VERSION}/kubeshark-mcp_${platform}.mcpb.sha256"
+            url="https://github.com/${{ github.repository }}/releases/download/${VERSION}/kubeshark-mcp_${platform}.mcpb.sha256"
             echo "  Fetching ${platform}..."
             if ! curl -sfL "${url}" -o "bin/kubeshark-mcp_${platform}.mcpb.sha256"; then
               echo "::warning::Failed to download SHA256 for ${platform}"
@@ -94,11 +99,11 @@ jobs:
             --arg windows_amd64_sha "$WINDOWS_AMD64_SHA256" \
             '{
               "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-              "name": "io.github.kubeshark/mcp",
+              "name": "io.github.${{ steps.meta.outputs.owner_lcase }}/mcp",
               "displayName": "Kubeshark",
               "description": "Real-time Kubernetes network traffic visibility and API analysis for HTTP, gRPC, Redis, Kafka, DNS.",
               "icon": "https://raw.githubusercontent.com/kubeshark/assets/refs/heads/master/logo/ico/icon.ico",
-              "repository": { "url": "https://github.com/kubeshark/kubeshark", "source": "github" },
+              "repository": { "url": "https://github.com/${{ github.repository }}", "source": "github" },
               "homepage": "https://kubeshark.com",
               "license": "Apache-2.0",
               "version": $version,
@@ -106,11 +111,11 @@ jobs:
               "categories": ["kubernetes", "networking", "observability", "debugging", "security"],
               "tags": ["kubernetes", "network", "traffic", "api", "http", "grpc", "kafka", "redis", "dns", "pcap", "wireshark", "tcpdump", "observability", "debugging", "microservices"],
               "packages": [
-                { "registryType": "mcpb", "identifier": ("https://github.com/kubeshark/kubeshark/releases/download/" + $full_version + "/kubeshark-mcp_darwin_arm64.mcpb"), "fileSha256": $darwin_arm64_sha, "transport": { "type": "stdio" } },
-                { "registryType": "mcpb", "identifier": ("https://github.com/kubeshark/kubeshark/releases/download/" + $full_version + "/kubeshark-mcp_darwin_amd64.mcpb"), "fileSha256": $darwin_amd64_sha, "transport": { "type": "stdio" } },
-                { "registryType": "mcpb", "identifier": ("https://github.com/kubeshark/kubeshark/releases/download/" + $full_version + "/kubeshark-mcp_linux_arm64.mcpb"), "fileSha256": $linux_arm64_sha, "transport": { "type": "stdio" } },
-                { "registryType": "mcpb", "identifier": ("https://github.com/kubeshark/kubeshark/releases/download/" + $full_version + "/kubeshark-mcp_linux_amd64.mcpb"), "fileSha256": $linux_amd64_sha, "transport": { "type": "stdio" } },
-                { "registryType": "mcpb", "identifier": ("https://github.com/kubeshark/kubeshark/releases/download/" + $full_version + "/kubeshark-mcp_windows_amd64.mcpb"), "fileSha256": $windows_amd64_sha, "transport": { "type": "stdio" } }
+                { "registryType": "mcpb", "identifier": ("https://github.com/${{ github.repository }}/releases/download/" + $full_version + "/kubeshark-mcp_darwin_arm64.mcpb"), "fileSha256": $darwin_arm64_sha, "transport": { "type": "stdio" } },
+                { "registryType": "mcpb", "identifier": ("https://github.com/${{ github.repository }}/releases/download/" + $full_version + "/kubeshark-mcp_darwin_amd64.mcpb"), "fileSha256": $darwin_amd64_sha, "transport": { "type": "stdio" } },
+                { "registryType": "mcpb", "identifier": ("https://github.com/${{ github.repository }}/releases/download/" + $full_version + "/kubeshark-mcp_linux_arm64.mcpb"), "fileSha256": $linux_arm64_sha, "transport": { "type": "stdio" } },
+                { "registryType": "mcpb", "identifier": ("https://github.com/${{ github.repository }}/releases/download/" + $full_version + "/kubeshark-mcp_linux_amd64.mcpb"), "fileSha256": $linux_amd64_sha, "transport": { "type": "stdio" } },
+                { "registryType": "mcpb", "identifier": ("https://github.com/${{ github.repository }}/releases/download/" + $full_version + "/kubeshark-mcp_windows_amd64.mcpb"), "fileSha256": $windows_amd64_sha, "transport": { "type": "stdio" } }
               ],
               "tools": [
                 { "name": "check_kubeshark_status", "description": "Check if Kubeshark is currently running in the cluster.", "mode": "proxy" },
