@@ -46,4 +46,9 @@ func TestFrontServesSPAFallback(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "kubeshark") {
 		t.Errorf("body = %q, want the SPA shell", rec.Body.String())
 	}
+	for _, want := range []string{"/api/flows2", "/ws"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("body missing traffic wiring %q", want)
+		}
+	}
 }
